@@ -5,7 +5,7 @@ Code from Pragmatic Programmers "Programming WebRTC" book
 
 ``$ npm run ssl-keys --keydir="./ssl-certs" --numdays=1825 ``
 
-1. Create a ``.env`` in the app root folder with the following contents:
+2. Create a ``.env`` in the app root folder with the following contents:
 
 ```
 LOCALHOST_SSL_KEY=./ssl-certs/localhost.key
