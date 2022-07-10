@@ -54,7 +54,18 @@ document.querySelector('#call-button')
  *  User-Interface Functions and Callbacks
  */
 function handleCallButton(event) {
-    console.log('Call button clicked! Named callback function active!')
+    console.log('Call button clicked! Named callback function active!');
+
+    const callButton = event.target;
+    if (callButton.className === 'join') {
+      console.log('Joining the call...');
+      callButton.className = 'leave';
+      callButton.innerText = 'Leave Call';
+    } else {
+      console.log('Leaving the call...');
+      callButton.className = 'join';
+      callButton.innerText = 'Join Call';
+    }
 }
 
 
