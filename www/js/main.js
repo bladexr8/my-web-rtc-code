@@ -20,6 +20,19 @@
 
 const namespace = prepareNamespace(window.location.hash, true);
 
+// signalling channel
+const sc = io.connect('/' + namespace, { autoConnect: false});
+
+registerScCallbacks();
+
+/*sc.on('connect', function() {
+  console.log('Successfully connected to the signalling channel!');
+})
+
+sc.on('disconnect', function() {
+  console.log('Successfully disconnected from the signalling channel!');
+})*/
+
 
 
 
@@ -61,11 +74,23 @@ function handleCallButton(event) {
       console.log('Joining the call...');
       callButton.className = 'leave';
       callButton.innerText = 'Leave Call';
+      joinCall();
+      console.log(`sc.active = ${sc.active}`);
     } else {
       console.log('Leaving the call...');
       callButton.className = 'join';
       callButton.innerText = 'Join Call';
+      leaveCall();
+      console.log(`sc.active = ${sc.active}`);
     }
+}
+
+function joinCall() {
+  sc.open();
+}
+
+function leaveCall() {
+  sc.close();
 }
 
 
@@ -107,7 +132,28 @@ function handleCallButton(event) {
 /**
  *  Signaling-Channel Functions and Callbacks
  */
+function registerScCallbacks() {
+  sc.on('connect', handleScConnect);
+  sc.on('connected peer', handleScConnectedPeer);
+  sc.on('disconnected peer', handleScDisconnectedPeer);
+  sc.on('signal', handleScSignal);
+}
 
+function handleScConnect() {
+  console.log('Successfully connected to the signaling server');
+}
+
+function handleScConnectedPeer() {
+
+}
+
+function handleScDisconnectedPeer() {
+
+}
+
+function handleScSignal() {
+
+}
 
 
 
