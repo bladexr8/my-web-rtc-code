@@ -11,7 +11,9 @@
 /**
  *  Global Variables: $self and $peer
  */
-
+const $self = {
+  mediaConstraints: { audio: false, video: true }
+};
 
 
 /**
@@ -58,7 +60,7 @@ document.querySelector('#call-button')
 /**
  *  User-Media Setup
  */
-
+requestUserMedia($self.mediaConstraints);
 
 
 
@@ -97,7 +99,16 @@ function leaveCall() {
 /**
  *  User-Media Functions
  */
+function displayStream(selector, stream) {
+  document.querySelector(selector).srcObject = stream;
+}
 
+async function requestUserMedia(media_constraints) {
+  $self.stream = new MediaStream();
+  $self.media = await navigator.mediaDevices.getUserMedia(media_constraints);
+  $self.stream.addTrack($self.media.getTracks()[0]);
+  displayStream('#self', $self.stream);
+}
 
 
 /**
