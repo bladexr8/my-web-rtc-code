@@ -12,9 +12,17 @@
  *  Global Variables: $self and $peer
  */
 const $self = {
+  rtcConfig: null,
+  isPolite: false,
+  isMakingOffer: false,
+  isIgnoringOffer: false,
+  isSettingRemoteAnswerPending: false,
   mediaConstraints: { audio: false, video: true }
 };
 
+const $peer = {
+  connection: new RTCPeerConnection($self.rtcConfig)
+};
 
 /**
  *  Signaling-Channel Setup
@@ -88,10 +96,12 @@ function handleCallButton(event) {
 }
 
 function joinCall() {
+  console.log('Opening Socket...');
   sc.open();
 }
 
 function leaveCall() {
+  console.log('Closing Socket...');
   sc.close();
 }
 
@@ -110,18 +120,42 @@ async function requestUserMedia(media_constraints) {
   displayStream('#self', $self.stream);
 }
 
+function addStreamingMedia(stream, peer) {
+  console.log('Adding Streaming Media to Peer...');
+  if (stream) {
+    for (let track of stream.getTracks()) {
+      peer.connection.addTrack(track, stream);
+    }
+  }
+}
+
 
 /**
  *  Call Features & Reset Functions
  */
-
+function establishCallFeatures(peer) {
+  console.log('Establishing Call Features...');
+  registerRtcCallbacks(peer);
+  addStreamingMedia($self.mediaStream, peer);
+}
 
 
 
 /**
  *  WebRTC Functions and Callbacks
  */
+function registerRtcCallbacks(peer) {
+  console.log('Registering RTC Callbacks...');
+  peer.connection.onnegotiationneeded  = handleRtcConnectionNegotiation;
+  peer.connection.onicecandidate = handleRtcIceCandidate;
+  peer.connection.ontrack = handleRtcPeerTrack;
+}
 
+function handleRtcPeerTrack({ track, streams: [stream] }) {
+  // Handle peer media tracks
+  console.log('Attempt to display media from peer...');
+  displayStream(stream, '#peer');
+}
 
 
 
@@ -137,6 +171,20 @@ async function requestUserMedia(media_constraints) {
 /**
  *  Reusable WebRTC Functions and Callbacks
  */
+async function handleRtcConnectionNegotiation() {
+  // Handle connection negotiation
+  $self.isMakingOffer = true;
+  console.log('Attempting to make an offer...');
+  await $peer.connection.setLocalDescription();
+  sc.emit('signal', { description: $peer.connection.localDescription });
+  $self.isMakingOffer = false;
+}
+
+function handleRtcIceCandidate({ candidate }) {
+  // Handle ICE candidates
+  console.log('Attempting to handle an ICE candidate...');
+  sc.emit('signal', { candidate: candidate});
+}
 
 
 
@@ -151,10 +199,14 @@ function registerScCallbacks() {
 }
 
 function handleScConnect() {
-  console.log('Successfully connected to the signaling server');
+  console.log('Successfully connected to the signaling server...');
+  establishCallFeatures($peer);
 }
 
 function handleScConnectedPeer() {
+  console.log('Successfully Connected Peer...');
+  // only initially connected party will receive this event
+  $self.isPolite = true;
 
 }
 
@@ -162,8 +214,34 @@ function handleScDisconnectedPeer() {
 
 }
 
-function handleScSignal() {
-
+async function handleScSignal({ description, candidate}) {
+  if (description) {
+    console.log('Handling Local Description...');
+    const ready_for_offer = !self.isMakingOffer && ($peer.connection.signalingState == 'stable' || $self.isSettingRemoteAnswerPending);
+    const offer_collision = description.type === 'offer' && !ready_for_offer;
+    $self.isIgnoringOffer = !$self.isPolite && offer_collision;
+    if ($self.isIgnoringOffer) {
+      return;
+    }
+    $self.isSettingRemoteAnswerPending = description.type == 'answer';
+    await $peer.connection.setRemoteDescription(description);
+    $self.isSettingRemoteAnswerPending = false;
+    if (description.type === 'offer') {
+      await $peer.connection.setLocalDescription();
+      sc.emit('signal', { description: $peer.connection.localDescription });
+    }
+  } else if (candidate) {
+    console.log('Handling Candidate...');
+    try {
+      await $peer.connection.addIceCandidate(candidate);
+    } catch (e) {
+      // Log error unless $self is ignoring offers
+      // and candidate is not an empty string
+      if ($self.isIgnoringOffer && candidate.candidate.length > 1) {
+        console.error('Unable to add ICE candidate for peer: ', e);
+      }
+    }
+  }
 }
 
 
