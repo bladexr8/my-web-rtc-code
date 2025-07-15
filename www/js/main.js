@@ -5,8 +5,8 @@
  * courses, books, articles, and the like. Contact us if you are in doubt.
  * We make no guarantees that this code is fit for any purpose.
  * Visit https://pragprog.com/titles/ksrtc for more book information.
-***/
-'use strict';
+ ***/
+"use strict";
 
 /**
  *  Global Variables: $self and $peer
@@ -17,11 +17,11 @@ const $self = {
   isMakingOffer: false,
   isIgnoringOffer: false,
   isSettingRemoteAnswerPending: false,
-  mediaConstraints: { audio: false, video: true }
+  mediaConstraints: { audio: false, video: true },
 };
 
 const $peer = {
-  connection: new RTCPeerConnection($self.rtcConfig)
+  connection: new RTCPeerConnection($self.rtcConfig),
 };
 
 /**
@@ -31,7 +31,7 @@ const $peer = {
 const namespace = prepareNamespace(window.location.hash, true);
 
 // signalling channel
-const sc = io.connect('/' + namespace, { autoConnect: false});
+const sc = io.connect("/" + namespace, { autoConnect: false });
 
 registerScCallbacks();
 
@@ -43,85 +43,78 @@ sc.on('disconnect', function() {
   console.log('Successfully disconnected from the signalling channel!');
 })*/
 
-
-
-
 /**
  * =========================================================================
  *  Begin Application-Specific Code
  * =========================================================================
  */
 
-
 /**
  *  User-Interface Setup
  */
 
-document.querySelector('#header h1')
-  .innerText = 'Welcome to Room #' + namespace;
+document.querySelector("#header h1").innerText =
+  "Welcome to Room #" + namespace;
 
-document.querySelector('#call-button')
-  .addEventListener('click', handleCallButton);
-
-
+document
+  .querySelector("#call-button")
+  .addEventListener("click", handleCallButton);
 
 /**
  *  User-Media Setup
  */
 requestUserMedia($self.mediaConstraints);
 
-
-
-
 /**
  *  User-Interface Functions and Callbacks
  */
 function handleCallButton(event) {
-    console.log('Call button clicked! Named callback function active!');
+  console.log("Call button clicked! Named callback function active!");
 
-    const callButton = event.target;
-    if (callButton.className === 'join') {
-      console.log('Joining the call...');
-      callButton.className = 'leave';
-      callButton.innerText = 'Leave Call';
-      joinCall();
-      console.log(`sc.active = ${sc.active}`);
-    } else {
-      console.log('Leaving the call...');
-      callButton.className = 'join';
-      callButton.innerText = 'Join Call';
-      leaveCall();
-      console.log(`sc.active = ${sc.active}`);
-    }
+  const callButton = event.target;
+  if (callButton.className === "join") {
+    console.log("Joining the call...");
+    callButton.className = "leave";
+    callButton.innerText = "Leave Call";
+    joinCall();
+    console.log(`sc.active = ${sc.active}`);
+  } else {
+    console.log("Leaving the call...");
+    callButton.className = "join";
+    callButton.innerText = "Join Call";
+    leaveCall();
+    console.log(`sc.active = ${sc.active}`);
+  }
 }
 
 function joinCall() {
-  console.log('Opening Socket...');
+  console.log("Opening Socket...");
   sc.open();
 }
 
 function leaveCall() {
-  console.log('Closing Socket...');
+  console.log("Closing Socket...");
   sc.close();
+  resetPeer($peer);
 }
-
 
 /**
  *  User-Media Functions
  */
+async function requestUserMedia(media_constraints) {
+  console.log("Requesting User Media...");
+  $self.mediaStream = new MediaStream();
+  $self.media = await navigator.mediaDevices.getUserMedia(media_constraints);
+  $self.mediaStream.addTrack($self.media.getTracks()[0]);
+  displayStream("#self", $self.mediaStream);
+}
+
 function displayStream(selector, stream) {
   document.querySelector(selector).srcObject = stream;
 }
 
-async function requestUserMedia(media_constraints) {
-  $self.stream = new MediaStream();
-  $self.media = await navigator.mediaDevices.getUserMedia(media_constraints);
-  $self.stream.addTrack($self.media.getTracks()[0]);
-  displayStream('#self', $self.stream);
-}
-
 function addStreamingMedia(stream, peer) {
-  console.log('Adding Streaming Media to Peer...');
+  console.log("Adding Streaming Media to Peer...");
   if (stream) {
     for (let track of stream.getTracks()) {
       peer.connection.addTrack(track, stream);
@@ -129,36 +122,36 @@ function addStreamingMedia(stream, peer) {
   }
 }
 
-
 /**
  *  Call Features & Reset Functions
  */
 function establishCallFeatures(peer) {
-  console.log('Establishing Call Features...');
+  console.log("Establishing Call Features...");
   registerRtcCallbacks(peer);
   addStreamingMedia($self.mediaStream, peer);
 }
 
-
+function resetPeer(peer) {
+  displayStream("#peer", null);
+  peer.connection.close();
+  peer.connection = new RTCPeerConnection($self.rtcConfig);
+}
 
 /**
  *  WebRTC Functions and Callbacks
  */
 function registerRtcCallbacks(peer) {
-  console.log('Registering RTC Callbacks...');
-  peer.connection.onnegotiationneeded  = handleRtcConnectionNegotiation;
+  console.log("Registering RTC Callbacks...");
+  peer.connection.onnegotiationneeded = handleRtcConnectionNegotiation;
   peer.connection.onicecandidate = handleRtcIceCandidate;
   peer.connection.ontrack = handleRtcPeerTrack;
 }
 
 function handleRtcPeerTrack({ track, streams: [stream] }) {
   // Handle peer media tracks
-  console.log('Attempt to display media from peer...');
-  displayStream(stream, '#peer');
+  console.log("Attempt to display media from peer...");
+  displayStream("#peer", stream);
 }
-
-
-
 
 /**
  * =========================================================================
@@ -166,97 +159,97 @@ function handleRtcPeerTrack({ track, streams: [stream] }) {
  * =========================================================================
  */
 
-
-
 /**
  *  Reusable WebRTC Functions and Callbacks
  */
 async function handleRtcConnectionNegotiation() {
   // Handle connection negotiation
+  console.log("Handling RTC Connection Negotiation...");
   $self.isMakingOffer = true;
-  console.log('Attempting to make an offer...');
+  console.log("Attempting to make an offer...");
   await $peer.connection.setLocalDescription();
-  sc.emit('signal', { description: $peer.connection.localDescription });
+  sc.emit("signal", { description: $peer.connection.localDescription });
   $self.isMakingOffer = false;
 }
 
 function handleRtcIceCandidate({ candidate }) {
   // Handle ICE candidates
-  console.log('Attempting to handle an ICE candidate...');
-  sc.emit('signal', { candidate: candidate});
+  console.log("Attempting to handle an ICE candidate...");
+  sc.emit("signal", { candidate: candidate });
 }
-
-
 
 /**
  *  Signaling-Channel Functions and Callbacks
  */
 function registerScCallbacks() {
-  sc.on('connect', handleScConnect);
-  sc.on('connected peer', handleScConnectedPeer);
-  sc.on('disconnected peer', handleScDisconnectedPeer);
-  sc.on('signal', handleScSignal);
+  console.log("Registering Sc callbacks...");
+  sc.on("connect", handleScConnect);
+  sc.on("connected peer", handleScConnectedPeer);
+  sc.on("disconnected peer", handleScDisconnectedPeer);
+  sc.on("signal", handleScSignal);
 }
 
 function handleScConnect() {
-  console.log('Successfully connected to the signaling server...');
+  console.log("Successfully connected to the signaling server...");
   establishCallFeatures($peer);
 }
 
 function handleScConnectedPeer() {
-  console.log('Successfully Connected Peer...');
+  console.log("Successfully Connected Peer...");
   // only initially connected party will receive this event
   $self.isPolite = true;
-
 }
 
 function handleScDisconnectedPeer() {
-
+  resetPeer($peer);
+  establishCallFeatures($peer);
 }
 
-async function handleScSignal({ description, candidate}) {
+async function handleScSignal({ description, candidate }) {
+  console.log("Handling Sc Signal...");
   if (description) {
-    console.log('Handling Local Description...');
-    const ready_for_offer = !self.isMakingOffer && ($peer.connection.signalingState == 'stable' || $self.isSettingRemoteAnswerPending);
-    const offer_collision = description.type === 'offer' && !ready_for_offer;
+    console.log("Handling Local Description...");
+    const ready_for_offer =
+      !self.isMakingOffer &&
+      ($peer.connection.signalingState == "stable" ||
+        $self.isSettingRemoteAnswerPending);
+    const offer_collision = description.type === "offer" && !ready_for_offer;
     $self.isIgnoringOffer = !$self.isPolite && offer_collision;
     if ($self.isIgnoringOffer) {
       return;
     }
-    $self.isSettingRemoteAnswerPending = description.type == 'answer';
+    $self.isSettingRemoteAnswerPending = description.type == "answer";
     await $peer.connection.setRemoteDescription(description);
     $self.isSettingRemoteAnswerPending = false;
-    if (description.type === 'offer') {
+    if (description.type === "offer") {
       await $peer.connection.setLocalDescription();
-      sc.emit('signal', { description: $peer.connection.localDescription });
+      sc.emit("signal", { description: $peer.connection.localDescription });
     }
   } else if (candidate) {
-    console.log('Handling Candidate...');
+    console.log("Handling Candidate...");
     try {
       await $peer.connection.addIceCandidate(candidate);
     } catch (e) {
       // Log error unless $self is ignoring offers
       // and candidate is not an empty string
       if ($self.isIgnoringOffer && candidate.candidate.length > 1) {
-        console.error('Unable to add ICE candidate for peer: ', e);
+        console.error("Unable to add ICE candidate for peer: ", e);
       }
     }
   }
 }
 
-
-
 /**
  *  Utility Functions
  */
 function prepareNamespace(hash, set_location) {
-  let ns = hash.replace(/^#/, ''); // remove # from the hash
+  let ns = hash.replace(/^#/, ""); // remove # from the hash
   if (/^[0-9]{7}$/.test(ns)) {
-    console.log('Checked existing namespace', ns);
+    console.log("Checked existing namespace", ns);
     return ns;
   }
   ns = Math.random().toString().substring(2, 9);
-  console.log('Created new namespace', ns);
+  console.log("Created new namespace", ns);
   if (set_location) window.location.hash = ns;
   return ns;
 }
