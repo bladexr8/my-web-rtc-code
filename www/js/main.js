@@ -35,13 +35,19 @@ const sc = io.connect("/" + namespace, { autoConnect: false });
 
 registerScCallbacks();
 
-/*sc.on('connect', function() {
-  console.log('Successfully connected to the signalling channel!');
-})
-
-sc.on('disconnect', function() {
-  console.log('Successfully disconnected from the signalling channel!');
-})*/
+/**
+ * Classes
+ */
+const VideoFX = class {
+  constructor() {
+    this.filters = ["grayscale", "sepia", "noir", "psychedelic", "none"];
+  }
+  cycleFilter() {
+    const filter = this.filters.shift();
+    this.filters.push(filter);
+    return filter;
+  }
+};
 
 /**
  * =========================================================================
@@ -60,10 +66,18 @@ document
   .querySelector("#call-button")
   .addEventListener("click", handleCallButton);
 
+document.querySelector("#self").addEventListener("click", function (event) {
+  console.log("Cycling Filter...");
+  const filter = `filter-${$self.filters.cycleFilter()}`;
+  event.target.className = filter;
+});
+
 /**
  *  User-Media Setup
  */
 requestUserMedia($self.mediaConstraints);
+
+$self.filters = new VideoFX();
 
 /**
  *  User-Interface Functions and Callbacks

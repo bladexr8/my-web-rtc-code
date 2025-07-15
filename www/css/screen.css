@@ -72,6 +72,24 @@ video {
   max-width: 320px;
   margin-bottom: 11px;
 }
+
+/* Video Effects */
+.filter-grayscale {
+  filter: grayscale(100%);
+}
+
+.filter-sepia {
+  filter: sepia(100%);
+}
+
+.filter-noir {
+  filter: grayscale(100%) contrast(300%) brightness(60%);
+}
+
+.filter-psychedelic {
+  filter: hue-rotate(180deg) saturate(400%) contrast(200%);
+}
+
 /* END:selfVideo
 
 @media screen and (min-width: 500px) {
