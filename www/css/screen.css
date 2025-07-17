@@ -60,6 +60,10 @@ button {
   color: black;
 }
 
+.connected #self {
+  cursor: pointer;
+}
+
 /* Video Elements */
 
 video {

@@ -66,11 +66,7 @@ document
   .querySelector("#call-button")
   .addEventListener("click", handleCallButton);
 
-document.querySelector("#self").addEventListener("click", function (event) {
-  console.log("Cycling Filter...");
-  const filter = `filter-${$self.filters.cycleFilter()}`;
-  event.target.className = filter;
-});
+document.querySelector("#self").addEventListener("click", handleSelfVideo);
 
 /**
  *  User-Media Setup
@@ -110,6 +106,17 @@ function leaveCall() {
   console.log("Closing Socket...");
   sc.close();
   resetPeer($peer);
+}
+
+function handleSelfVideo(event) {
+  if ($peer.connection.connectionState !== 'connected') return;
+  const filter = `filter-${$self.filters.cycleFilter()}`;
+  // set up data channel on peer
+  const fdc = $peer.connection.createDataChannel(filter);
+  fdc.onclose = function() {
+    console.log(`Remote peer has closed the ${filter} data channel...`);
+  };
+  event.target.className = filter;
 }
 
 /**
@@ -156,6 +163,7 @@ function resetPeer(peer) {
  */
 function registerRtcCallbacks(peer) {
   console.log("Registering RTC Callbacks...");
+  peer.connection.onconnectionstatechange = handleRtcConnectionStateChange;
   peer.connection.onnegotiationneeded = handleRtcConnectionNegotiation;
   peer.connection.onicecandidate = handleRtcIceCandidate;
   peer.connection.ontrack = handleRtcPeerTrack;
@@ -165,6 +173,12 @@ function handleRtcPeerTrack({ track, streams: [stream] }) {
   // Handle peer media tracks
   console.log("Attempt to display media from peer...");
   displayStream("#peer", stream);
+}
+
+function handleRtcConnectionStateChange() {
+  const connection_state = $peer.connection.connectionState;
+  console.log(`The connection state is now ${connection_state}`);
+  document.querySelector('body').className = connection_state;
 }
 
 /**
