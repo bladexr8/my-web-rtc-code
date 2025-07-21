@@ -84,6 +84,14 @@ document
   .querySelector("#chat-form")
   .addEventListener("submit", handleMessageForm);
 
+// set mic toggle state
+document
+  .querySelector("#toggle-mic")
+  .setAttribute("aria-checked", $self.features.audio);
+
+// set up handler for media buttons
+document.querySelector("#footer").addEventListener("click", handleMediaButtons);
+
 /**
  *  User-Media Setup
  */
@@ -200,6 +208,43 @@ function sendOrQueueMessage(peer, message, push = true) {
   } catch (e) {
     console.error("Error sending message: ", e);
     queueMessage(message, push);
+  }
+}
+
+// Handle Media button toggles
+function handleMediaButtons(event) {
+  const target = event.target;
+  if (target.tagName !== "BUTTON") return;
+  switch (target.id) {
+    case "toggle-mic":
+      toggleMic(target);
+      break;
+    case "toggle-cam":
+      toggleCam(target);
+      break;
+  }
+}
+
+function toggleMic(button) {
+  console.log("Toggling Microphone...");
+  const audio = $self.mediaTracks.audio;
+  //console.log(`audio.enabled = ${audio.enabled}`);
+  const enabled_state = (audio.enabled = !audio.enabled);
+  $self.features.audio = enabled_state;
+  button.setAttribute("aria-checked", enabled_state);
+}
+
+function toggleCam(button) {
+  console.log("Toggling Video...");
+  const video = $self.mediaTracks.video;
+  const enabled_state = (video.enabled = !video.enabled);
+  $self.features.video = enabled_state;
+  button.setAttribute("aria-checked", enabled_state);
+  if (enabled_state) {
+    $self.mediaStream.addTrack($self.mediaTracks.video);
+  } else {
+    $self.mediaStream.removeTrack($self.mediaTracks.video);
+    displayStream("#self", $self.mediaStream);
   }
 }
 
