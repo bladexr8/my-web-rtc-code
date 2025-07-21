@@ -17,11 +17,19 @@ const $self = {
   isMakingOffer: false,
   isIgnoringOffer: false,
   isSettingRemoteAnswerPending: false,
-  mediaConstraints: { audio: false, video: true },
+  mediaConstraints: { audio: true, video: true },
+  mediaStream: new MediaStream(),
+  mediaTracks: {},
+  features: {
+    audio: false,
+  },
 };
 
 const $peer = {
   connection: new RTCPeerConnection($self.rtcConfig),
+  mediaStream: new MediaStream(),
+  mediaTracks: {},
+  features: {},
 };
 
 /**
@@ -72,8 +80,9 @@ document
 document.querySelector("#self").addEventListener("click", handleSelfVideo);
 
 // handle submit button for chat
-document.querySelector('#chat-form').addEventListener('submit', handleMessageForm);
-
+document
+  .querySelector("#chat-form")
+  .addEventListener("submit", handleMessageForm);
 
 /**
  *  User-Media Setup
@@ -130,31 +139,34 @@ function handleSelfVideo(event) {
 
 // handle chat form submission
 function handleMessageForm(event) {
-  console.log('Handling Message Input...');
+  console.log("Handling Message Input...");
   event.preventDefault();
-  const input = document.querySelector('#chat-msg');
-  const message = input.value;
-  if (message === '') return;
+  const input = document.querySelector("#chat-msg");
+  const message = {};
+  message.text = input.value;
+  message.timestamp = Date.now();
+  if (message === "") return;
 
-  appendMessage('self', '#chat-log', message);
+  appendMessage("self", "#chat-log", message);
   // send message to peer chat or queue it
   sendOrQueueMessage($peer, message);
-  input.value = '';
+  input.value = "";
 }
 
 // append messages to chat
 function appendMessage(sender, log_element, message) {
-  console.log('Appending Message to Chat...');
+  console.log("Appending Message to Chat...");
   const log = document.querySelector(log_element);
-  const li = document.createElement('li');
+  const li = document.createElement("li");
   li.className = sender;
-  li.innerText = message;
+  li.innerText = message.text;
+  li.dataset.timestamp = message.timestamp;
   log.appendChild(li);
   // auto scroll
   if (log.scrollTo) {
     log.scrollTo({
       top: log.scrollHeight,
-      behavior: 'smooth',
+      behavior: "smooth",
     });
   } else {
     log.scrollTop = log.scrollHeight;
@@ -172,7 +184,6 @@ function queueMessage(message, push = true) {
     // queue at the start
     $self.messageQueue.unshift(message);
   }
-  
 }
 
 // send messages if chat connected, else
@@ -180,14 +191,14 @@ function queueMessage(message, push = true) {
 function sendOrQueueMessage(peer, message, push = true) {
   const chat_channel = peer.chatChannel;
   // check if peer is connected
-  if (!chat_channel || chat_channel.readyState !== 'open') {
+  if (!chat_channel || chat_channel.readyState !== "open") {
     queueMessage(message, push);
     return;
   }
   try {
-    chat_channel.send(message);
-  } catch(e) {
-    console.error('Error sending message: ',e);
+    chat_channel.send(JSON.stringify(message));
+  } catch (e) {
+    console.error("Error sending message: ", e);
     queueMessage(message, push);
   }
 }
@@ -197,9 +208,19 @@ function sendOrQueueMessage(peer, message, push = true) {
  */
 async function requestUserMedia(media_constraints) {
   console.log("Requesting User Media...");
-  $self.mediaStream = new MediaStream();
   $self.media = await navigator.mediaDevices.getUserMedia(media_constraints);
-  $self.mediaStream.addTrack($self.media.getTracks()[0]);
+
+  // Hold onto audio and video track references
+  $self.mediaTracks.audio = $self.media.getAudioTracks()[0];
+  $self.mediaTracks.video = $self.media.getVideoTracks()[0];
+
+  // Mute the audio if `$self.features.audio` evaluates to `false`
+  $self.mediaTracks.audio.enabled = !!$self.features.audio;
+
+  // Add audio and video tracks to mediaStream
+  $self.mediaStream.addTrack($self.mediaTracks.audio);
+  $self.mediaStream.addTrack($self.mediaTracks.video);
+
   displayStream("#self", $self.mediaStream);
 }
 
@@ -207,39 +228,67 @@ function displayStream(selector, stream) {
   document.querySelector(selector).srcObject = stream;
 }
 
-function addStreamingMedia(stream, peer) {
+function addStreamingMedia(peer) {
   console.log("Adding Streaming Media to Peer...");
-  if (stream) {
-    for (let track of stream.getTracks()) {
-      peer.connection.addTrack(track, stream);
-    }
+  const tracks_list = Object.keys($self.mediaTracks);
+  for (let track of tracks_list) {
+    peer.connection.addTrack($self.mediaTracks[track]);
   }
 }
 
 // open symmetric data channel (both users will open
 // as part of joining the call)
 function addChatChannel(peer) {
-  peer.chatChannel = peer.connection.createDataChannel('text chat', {
+  peer.chatChannel = peer.connection.createDataChannel("text chat", {
     negotiated: true,
-    id: 100
+    id: 100,
   });
+
   // receive message
-  peer.chatChannel.onmessage = function(event) {
-    appendMessage('peer', '#chat-log', event.data);
+  peer.chatChannel.onmessage = function (event) {
+    const message = JSON.parse(event.data);
+    if (!message.id) {
+      // Prepare a response and append an incoming message
+      const response = {
+        id: message.timestamp,
+        timestamp: Date.now(),
+      };
+      sendOrQueueMessage(peer, response);
+      appendMessage("peer", "#chat-log", message);
+    } else {
+      // Handle an incoming response
+      handleResponse(message);
+    }
   };
+
   // close channel
-  peer.chatChannel.onclose = function() {
-    console.log('Chat Channel Closed...');
+  peer.chatChannel.onclose = function () {
+    console.log("Chat Channel Closed...");
   };
+
   // open channel
-  peer.chatChannel.onopen = function() {
-    console.log('Chat channel opened...');
-    while ($self.messageQueue.length > 0 && peer.chatChannel.readyState === 'open') {
+  peer.chatChannel.onopen = function () {
+    console.log("Chat channel opened...");
+    while (
+      $self.messageQueue.length > 0 &&
+      peer.chatChannel.readyState === "open"
+    ) {
       // send any queued messages
       let message = $self.messageQueue.shift();
       sendOrQueueMessage(peer, message, false);
     }
   };
+}
+
+function handleResponse(respone) {
+  const sent_item = document.querySelector(
+    `#chat-log *[data-timestamp="${response.id}"]`
+  );
+  const classes = ["received"];
+  if (response.timestamp - response.id > 1000) {
+    classes.push("delayed");
+  }
+  sent_item.classList.add(...classes);
 }
 
 /**
@@ -249,13 +298,15 @@ function establishCallFeatures(peer) {
   console.log("Establishing Call Features...");
   registerRtcCallbacks(peer);
   addChatChannel(peer);
-  addStreamingMedia($self.mediaStream, peer);
+  addStreamingMedia(peer);
 }
 
 function resetPeer(peer) {
   displayStream("#peer", null);
   peer.connection.close();
   peer.connection = new RTCPeerConnection($self.rtcConfig);
+  peer.mediaStream = new MediaStream();
+  (peer.mediaTracks = {}), (peer.features = {});
 }
 
 /**
@@ -270,10 +321,12 @@ function registerRtcCallbacks(peer) {
   peer.connection.ontrack = handleRtcPeerTrack;
 }
 
-function handleRtcPeerTrack({ track, streams: [stream] }) {
+function handleRtcPeerTrack({ track }) {
   // Handle peer media tracks
-  console.log("Attempt to display media from peer...");
-  displayStream("#peer", stream);
+  console.log(`Handle incoming ${track.kind} track...`);
+  $peer.mediaTracks[track.kind] = track;
+  $peer.mediaStream.addTrack(track);
+  displayStream("#peer", $peer.mediaStream);
 }
 
 function handleRtcConnectionStateChange() {
