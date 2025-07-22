@@ -233,6 +233,9 @@ function toggleMic(button) {
   const enabled_state = (audio.enabled = !audio.enabled);
   $self.features.audio = enabled_state;
   button.setAttribute("aria-checked", enabled_state);
+
+  // share features with $peer if connected
+  shareFeatures('audio');
 }
 
 function toggleCam(button) {
@@ -241,6 +244,10 @@ function toggleCam(button) {
   const enabled_state = (video.enabled = !video.enabled);
   $self.features.video = enabled_state;
   button.setAttribute("aria-checked", enabled_state);
+
+  // share features with $peer if connected
+  shareFeatures('video');
+
   if (enabled_state) {
     $self.mediaStream.addTrack($self.mediaTracks.video);
   } else {
@@ -364,6 +371,26 @@ function addFeaturesChannel(peer) {
       }
     }
   };
+}
+
+function shareFeatures(...features) {
+  const featuresToShare = {};
+
+  // don't try to share features before joining the call or
+  // before features channel is available
+  if (!$peer.featuresChannel) return;
+
+  for (let f of features) {
+    featuresToShare[f] = $self.features[f];
+  }
+
+  try {
+    $peer.featuresChannel.send(JSON.stringify(featuresToShare));
+  } catch (e) {
+    console.error('Error sending features: ', e);
+    // No need to queue. Contents of $self.features will send
+    // as soon as features channel opens
+  }
 }
 
 function handleResponse(respone) {
