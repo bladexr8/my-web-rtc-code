@@ -191,7 +191,12 @@ function handleImageInput(event) {
     timestamp: Date.now(),
     type: image.type,
   };
+  const payload = { metadata: metadata, file: image};
   appendMessage("self", "#chat-log", metadata, image);
+  // Remove appended file input element
+  event.target.remove();
+  // Send or queue the file
+  sendOrQueueMessage($peer, payload);
 }
 
 // append messages to chat
@@ -224,6 +229,69 @@ function appendMessage(sender, log_element, message, image) {
   } else {
     log.scrollTop = log.scrollHeight;
   }*/
+}
+
+// send File to peer
+function sendFile(peer, payload) {
+  const { metadata, file } = payload;
+  const file_channel = peer.connection.createDataChannel(`${metadata.kind}-${metadata.name}`);
+  const chunk = 16 * 1024; // 16KiB chunks
+
+  // send the file asap once file data channel opens
+  file_channel.onopen = async function() {
+    if (!peer.features || ($self.features.binaryType !== peer.features.binaryType)) {
+      file_channel.binaryType = 'arraybuffer';
+    }
+    // Prepare the data according to the binaryType in use
+    const data = file_channel.binaryType === 'blob' ? file : await file.arrayBuffer();
+    // Send the metadata
+    file_channel.send(JSON.stringify(metadata));
+    // Send the prepared data in chunks
+    for (let i=0; i < metadata.size; i+=chunk) {
+      file_channel.send(data.slice(i, i + chunk));
+    }
+  };
+
+  // receive a message
+  file_channel.onmessage = function({ data }) {
+    // Sending side will only ever receive a response
+    handleResponse(JSON.parse(data));
+    file_channel.close();
+  };
+}
+
+// receive a file on peer
+function receiveFile(file_channel) {
+  const chunks = [];
+  let metadata;
+  let bytes_received = 0;
+
+  // receive the file
+  file_channel.onmessage = function({ data }) {
+    // Receive the metadata
+    if (typeof data === 'string' && data.startsWith('{')) {
+      metadata = JSON.parse(data);
+    } else {
+      // Receive and squirrel away chunks...
+      bytes_received += data.size ? data.size : data.byteLength;
+      chunks.push(data);
+      // ... until the bytes received equal the file size
+      if (bytes_received === metadata.size) {
+        const image = new Blob(chunks, { type: metadata.type });
+        const response = {
+          id: metadata.timestamp,
+          timestamp: DataTransfer.now()
+        };
+        appendMessage('peer', '#chat-log', metadata, image);
+        // send an acknowledgement
+        try {
+          file_channel.send(JSON.stringify(response));
+        } catch(e) {
+          queueMessage(response);
+        }
+      }
+    }
+  }
 }
 
 function scrollToEnd(el) {
@@ -259,11 +327,15 @@ function sendOrQueueMessage(peer, message, push = true) {
     queueMessage(message, push);
     return;
   }
-  try {
-    chat_channel.send(JSON.stringify(message));
-  } catch (e) {
-    console.error("Error sending message: ", e);
-    queueMessage(message, push);
+  if (message.file) {
+    sendFile(peer, message);
+  } else {
+    try {
+      chat_channel.send(JSON.stringify(message));
+    } catch (e) {
+      console.error("Error sending message: ", e);
+      queueMessage(message, push);
+    }
   }
 }
 
@@ -525,6 +597,9 @@ function handleRtcDataChannel({ channel }) {
     channel.onopen = function () {
       channel.close();
     };
+  }
+  if (label.startsWith('image-')) {
+    receiveFile(channel);
   }
 }
 
