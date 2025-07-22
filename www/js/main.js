@@ -343,6 +343,18 @@ function addFeaturesChannel(peer) {
       // reveal "Remote peer is muted" message if muted (aria-hidden=false)
       // otherwise hide it (aria-hidden=true)
       status.setAttribute('aria-hidden', $peer.features.audio);
+    },
+    video: function() {
+      // This is all just to display the poster image
+      // rather than a black frame
+      if (peer.mediaTracks.video) {
+        if (peer.features.video) {
+          peer.mediaStream.addTrack(peer.mediaTracks.video);
+        } else {
+          peer.mediaStream.removeTrack(peer.mediaTracks.video);
+          displayStream('#peer', peer.mediaStream);
+        }
+      }
     }
   }
   console.log('Adding Features Channel...');
