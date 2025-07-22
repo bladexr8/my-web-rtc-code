@@ -32,6 +32,7 @@ const $peer = {
   features: {},
 };
 
+
 /**
  *  Signaling-Channel Setup
  */
@@ -325,6 +326,46 @@ function addChatChannel(peer) {
   };
 }
 
+
+// add call features channel
+function addFeaturesChannel(peer) {
+  const featureFunctions = {
+    audio: function() {
+      console.log('Toggling Peer Mute Message...');
+      const status = document.querySelector('#mic-status');
+      // reveal "Remote peer is muted" message if muted (aria-hidden=false)
+      // otherwise hide it (aria-hidden=true)
+      status.setAttribute('aria-hidden', $peer.features.audio);
+    }
+  }
+  console.log('Adding Features Channel...');
+  peer.featuresChannel = peer.connection.createDataChannel('features', {
+    negotiated: true,
+    id: 110
+  });
+
+  peer.featuresChannel.onopen = function() {
+    console.log('Features Channel Opened...');
+    // send features information just as soon as the channel opens
+    peer.featuresChannel.send(JSON.stringify($self.features));
+  };
+
+  peer.featuresChannel.onmessage = function(event) {
+    console.log(`Features Channel Message Received: ${event.data}`);
+    const features = JSON.parse(event.data);
+    const features_list = Object.keys(features);
+    for (let f of features_list) {
+      console.log(`Processing Feature ${f}...`);
+      // update the corresponding features field on $peer
+      peer.features[f] = features[f];
+      // if there's a corresponding function, run it
+      if (typeof featureFunctions[f] === 'function') {
+        featureFunctions[f]();
+      }
+    }
+  };
+}
+
 function handleResponse(respone) {
   const sent_item = document.querySelector(
     `#chat-log *[data-timestamp="${response.id}"]`
@@ -342,6 +383,7 @@ function handleResponse(respone) {
 function establishCallFeatures(peer) {
   console.log("Establishing Call Features...");
   registerRtcCallbacks(peer);
+  addFeaturesChannel(peer);
   addChatChannel(peer);
   addStreamingMedia(peer);
 }
