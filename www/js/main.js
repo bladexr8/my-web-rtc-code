@@ -419,6 +419,7 @@ function addFeaturesChannel(peer) {
 
   peer.featuresChannel.onopen = function () {
     console.log("Features Channel Opened...");
+    $self.features.binaryType = peer.featuresChannel.binaryType;
     // send features information just as soon as the channel opens
     peer.featuresChannel.send(JSON.stringify($self.features));
   };
