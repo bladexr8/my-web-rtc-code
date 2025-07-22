@@ -164,6 +164,7 @@ html {
   display: flex;
   column-gap: 11px;
 }
+
 .preserve-access {
   position: absolute;
   left: -20000px;
@@ -171,6 +172,9 @@ html {
 
 *[aria-hidden="true"] {
   visibility: hidden;
+}
+input[type="file"][aria-hidden="true"] {
+  display: none;
 }
 
 /* Forms and Controls */
@@ -207,7 +211,10 @@ button[aria-checked="false"] {
 }
 
 /* Chat Elements */
-
+img {
+  display: block;
+  max-width: 100%;
+}
 #chat {
   height: 100%;
   min-height: 220px; /* Accommodate small, squarish screens */
@@ -232,6 +239,10 @@ button[aria-checked="false"] {
   margin-bottom: 5.5px;
   max-width: 60%;
   clear: both;
+  overflow: hidden;
+}
+#chat-log .img {
+  padding: 0;
 }
 #chat-log .peer {
   background: #eee;
@@ -258,6 +269,11 @@ button[aria-checked="false"] {
   flex: 0 0 auto;
   background: #009;
   color: #eee;
+}
+#chat-img-btn {
+  background: #eee;
+  color: #000;
+  margin-right: 5.5px;
 }
 #chat-form input {
   flex: 1 1 100%;
@@ -326,6 +342,7 @@ video {
     margin-bottom: 0;
   }
 }
+
 @media screen and (min-width: 680px) {
   #interface {
     grid-template-columns: 1fr 1fr;

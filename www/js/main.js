@@ -32,7 +32,6 @@ const $peer = {
   features: {},
 };
 
-
 /**
  *  Signaling-Channel Setup
  */
@@ -92,6 +91,11 @@ document
 
 // set up handler for media buttons
 document.querySelector("#footer").addEventListener("click", handleMediaButtons);
+
+// handler for image file upload
+document
+  .querySelector("#chat-img-btn")
+  .addEventListener("click", handleImageButton);
 
 /**
  *  User-Media Setup
@@ -162,23 +166,74 @@ function handleMessageForm(event) {
   input.value = "";
 }
 
+// handle image button click
+function handleImageButton() {
+  let input = document.querySelector("input.temp");
+  input = input ? input : document.createElement("input");
+  input.className = "temp";
+  input.type = "file";
+  input.accept = ".gif, .jpg, .jpeg, .png";
+  input.setAttribute("aria-hidden", true);
+  // Safari/iOS requires appending the file input to the DOM
+  document.querySelector("#chat-form").appendChild(input);
+  input.addEventListener("change", handleImageInput);
+  input.click();
+}
+
+function handleImageInput(event) {
+  // Handle Image Input
+  event.preventDefault();
+  const image = event.target.files[0];
+  const metadata = {
+    kind: "image",
+    name: image.name,
+    size: image.size,
+    timestamp: Date.now(),
+    type: image.type,
+  };
+  appendMessage("self", "#chat-log", metadata, image);
+}
+
 // append messages to chat
-function appendMessage(sender, log_element, message) {
+function appendMessage(sender, log_element, message, image) {
   console.log("Appending Message to Chat...");
   const log = document.querySelector(log_element);
   const li = document.createElement("li");
   li.className = sender;
   li.innerText = message.text;
   li.dataset.timestamp = message.timestamp;
+  if (image) {
+    const img = document.createElement("img");
+    img.src = URL.createObjectURL(image);
+    img.onload = function () {
+      URL.revokeObjectURL(this.src);
+      scrollToEnd(log);
+    };
+    li.innerText = ""; // undefined on images
+    li.classList.add("img");
+    li.appendChild(img);
+  }
   log.appendChild(li);
+  scrollToEnd(log);
   // auto scroll
-  if (log.scrollTo) {
+  /*if (log.scrollTo) {
     log.scrollTo({
       top: log.scrollHeight,
       behavior: "smooth",
     });
   } else {
     log.scrollTop = log.scrollHeight;
+  }*/
+}
+
+function scrollToEnd(el) {
+  if (el.scrollTo) {
+    el.scrollTo({
+      top: el.scrollHeight,
+      behavior: "smooth",
+    });
+  } else {
+    el.scrollTop = el.scrollHeight;
   }
 }
 
@@ -235,7 +290,7 @@ function toggleMic(button) {
   button.setAttribute("aria-checked", enabled_state);
 
   // share features with $peer if connected
-  shareFeatures('audio');
+  shareFeatures("audio");
 }
 
 function toggleCam(button) {
@@ -246,7 +301,7 @@ function toggleCam(button) {
   button.setAttribute("aria-checked", enabled_state);
 
   // share features with $peer if connected
-  shareFeatures('video');
+  shareFeatures("video");
 
   if (enabled_state) {
     $self.mediaStream.addTrack($self.mediaTracks.video);
@@ -333,18 +388,17 @@ function addChatChannel(peer) {
   };
 }
 
-
 // add call features channel
 function addFeaturesChannel(peer) {
   const featureFunctions = {
-    audio: function() {
-      console.log('Toggling Peer Mute Message...');
-      const status = document.querySelector('#mic-status');
+    audio: function () {
+      console.log("Toggling Peer Mute Message...");
+      const status = document.querySelector("#mic-status");
       // reveal "Remote peer is muted" message if muted (aria-hidden=false)
       // otherwise hide it (aria-hidden=true)
-      status.setAttribute('aria-hidden', $peer.features.audio);
+      status.setAttribute("aria-hidden", $peer.features.audio);
     },
-    video: function() {
+    video: function () {
       // This is all just to display the poster image
       // rather than a black frame
       if (peer.mediaTracks.video) {
@@ -352,24 +406,24 @@ function addFeaturesChannel(peer) {
           peer.mediaStream.addTrack(peer.mediaTracks.video);
         } else {
           peer.mediaStream.removeTrack(peer.mediaTracks.video);
-          displayStream('#peer', peer.mediaStream);
+          displayStream("#peer", peer.mediaStream);
         }
       }
-    }
-  }
-  console.log('Adding Features Channel...');
-  peer.featuresChannel = peer.connection.createDataChannel('features', {
+    },
+  };
+  console.log("Adding Features Channel...");
+  peer.featuresChannel = peer.connection.createDataChannel("features", {
     negotiated: true,
-    id: 110
+    id: 110,
   });
 
-  peer.featuresChannel.onopen = function() {
-    console.log('Features Channel Opened...');
+  peer.featuresChannel.onopen = function () {
+    console.log("Features Channel Opened...");
     // send features information just as soon as the channel opens
     peer.featuresChannel.send(JSON.stringify($self.features));
   };
 
-  peer.featuresChannel.onmessage = function(event) {
+  peer.featuresChannel.onmessage = function (event) {
     console.log(`Features Channel Message Received: ${event.data}`);
     const features = JSON.parse(event.data);
     const features_list = Object.keys(features);
@@ -378,7 +432,7 @@ function addFeaturesChannel(peer) {
       // update the corresponding features field on $peer
       peer.features[f] = features[f];
       // if there's a corresponding function, run it
-      if (typeof featureFunctions[f] === 'function') {
+      if (typeof featureFunctions[f] === "function") {
         featureFunctions[f]();
       }
     }
@@ -399,7 +453,7 @@ function shareFeatures(...features) {
   try {
     $peer.featuresChannel.send(JSON.stringify(featuresToShare));
   } catch (e) {
-    console.error('Error sending features: ', e);
+    console.error("Error sending features: ", e);
     // No need to queue. Contents of $self.features will send
     // as soon as features channel opens
   }
