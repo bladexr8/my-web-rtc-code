@@ -539,7 +539,7 @@ function shareFeatures(...features) {
   }
 }
 
-function handleResponse(respone) {
+function handleResponse(response) {
   const sent_item = document.querySelector(
     `#chat-log *[data-timestamp="${response.id}"]`
   );
