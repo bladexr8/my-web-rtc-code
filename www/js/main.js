@@ -17,11 +17,19 @@ const $self = {
   isMakingOffer: false,
   isIgnoringOffer: false,
   isSettingRemoteAnswerPending: false,
-  mediaConstraints: { audio: false, video: true },
+  mediaConstraints: { audio: true, video: true },
+  mediaStream: new MediaStream(),
+  mediaTracks: {},
+  features: {
+    audio: false,
+  },
 };
 
 const $peer = {
   connection: new RTCPeerConnection($self.rtcConfig),
+  mediaStream: new MediaStream(),
+  mediaTracks: {},
+  features: {},
 };
 
 /**
@@ -72,8 +80,22 @@ document
 document.querySelector("#self").addEventListener("click", handleSelfVideo);
 
 // handle submit button for chat
-document.querySelector('#chat-form').addEventListener('submit', handleMessageForm);
+document
+  .querySelector("#chat-form")
+  .addEventListener("submit", handleMessageForm);
 
+// set mic toggle state
+document
+  .querySelector("#toggle-mic")
+  .setAttribute("aria-checked", $self.features.audio);
+
+// set up handler for media buttons
+document.querySelector("#footer").addEventListener("click", handleMediaButtons);
+
+// handler for image file upload
+document
+  .querySelector("#chat-img-btn")
+  .addEventListener("click", handleImageButton);
 
 /**
  *  User-Media Setup
@@ -130,34 +152,163 @@ function handleSelfVideo(event) {
 
 // handle chat form submission
 function handleMessageForm(event) {
-  console.log('Handling Message Input...');
+  console.log("Handling Message Input...");
   event.preventDefault();
-  const input = document.querySelector('#chat-msg');
-  const message = input.value;
-  if (message === '') return;
+  const input = document.querySelector("#chat-msg");
+  const message = {};
+  message.text = input.value;
+  message.timestamp = Date.now();
+  if (message === "") return;
 
-  appendMessage('self', '#chat-log', message);
+  appendMessage("self", "#chat-log", message);
   // send message to peer chat or queue it
   sendOrQueueMessage($peer, message);
-  input.value = '';
+  input.value = "";
+}
+
+// handle image button click
+function handleImageButton() {
+  let input = document.querySelector("input.temp");
+  input = input ? input : document.createElement("input");
+  input.className = "temp";
+  input.type = "file";
+  input.accept = ".gif, .jpg, .jpeg, .png";
+  input.setAttribute("aria-hidden", true);
+  // Safari/iOS requires appending the file input to the DOM
+  document.querySelector("#chat-form").appendChild(input);
+  input.addEventListener("change", handleImageInput);
+  input.click();
+}
+
+function handleImageInput(event) {
+  // Handle Image Input
+  event.preventDefault();
+  const image = event.target.files[0];
+  const metadata = {
+    kind: "image",
+    name: image.name,
+    size: image.size,
+    timestamp: Date.now(),
+    type: image.type,
+  };
+  const payload = { metadata: metadata, file: image };
+  appendMessage("self", "#chat-log", metadata, image);
+  // Remove appended file input element
+  event.target.remove();
+  // Send or queue the file
+  sendOrQueueMessage($peer, payload);
 }
 
 // append messages to chat
-function appendMessage(sender, log_element, message) {
-  console.log('Appending Message to Chat...');
+function appendMessage(sender, log_element, message, image) {
+  console.log("Appending Message to Chat...");
   const log = document.querySelector(log_element);
-  const li = document.createElement('li');
+  const li = document.createElement("li");
   li.className = sender;
-  li.innerText = message;
+  li.innerText = message.text;
+  li.dataset.timestamp = message.timestamp;
+  if (image) {
+    const img = document.createElement("img");
+    img.src = URL.createObjectURL(image);
+    img.onload = function () {
+      URL.revokeObjectURL(this.src);
+      scrollToEnd(log);
+    };
+    li.innerText = ""; // undefined on images
+    li.classList.add("img");
+    li.appendChild(img);
+  }
   log.appendChild(li);
+  scrollToEnd(log);
   // auto scroll
-  if (log.scrollTo) {
+  /*if (log.scrollTo) {
     log.scrollTo({
       top: log.scrollHeight,
-      behavior: 'smooth',
+      behavior: "smooth",
     });
   } else {
     log.scrollTop = log.scrollHeight;
+  }*/
+}
+
+// send File to peer
+function sendFile(peer, payload) {
+  const { metadata, file } = payload;
+  const file_channel = peer.connection.createDataChannel(
+    `${metadata.kind}-${metadata.name}`
+  );
+  const chunk = 16 * 1024; // 16KiB chunks
+
+  // send the file asap once file data channel opens
+  file_channel.onopen = async function () {
+    if (
+      !peer.features ||
+      $self.features.binaryType !== peer.features.binaryType
+    ) {
+      file_channel.binaryType = "arraybuffer";
+    }
+    // Prepare the data according to the binaryType in use
+    const data =
+      file_channel.binaryType === "blob" ? file : await file.arrayBuffer();
+    // Send the metadata
+    file_channel.send(JSON.stringify(metadata));
+    // Send the prepared data in chunks
+    for (let i = 0; i < metadata.size; i += chunk) {
+      file_channel.send(data.slice(i, i + chunk));
+    }
+  };
+
+  // receive a message
+  file_channel.onmessage = function ({ data }) {
+    // Sending side will only ever receive a response
+    handleResponse(JSON.parse(data));
+    file_channel.close();
+  };
+}
+
+// receive a file on peer
+function receiveFile(file_channel) {
+  const chunks = [];
+  let metadata;
+  let bytes_received = 0;
+
+  // receive the file
+  file_channel.onmessage = function ({ data }) {
+    console.log("Receiving File...");
+    // Receive the metadata
+    if (typeof data === "string" && data.startsWith("{")) {
+      metadata = JSON.parse(data);
+    } else {
+      // Receive and squirrel away chunks...
+      bytes_received += data.size ? data.size : data.byteLength;
+      chunks.push(data);
+      // ... until the bytes received equal the file size
+      if (bytes_received === metadata.size) {
+        const image = new Blob(chunks, { type: metadata.type });
+        const response = {
+          id: metadata.timestamp,
+          timestamp: Date.now(),
+        };
+        appendMessage("peer", "#chat-log", metadata, image);
+        // send an acknowledgement
+        try {
+          file_channel.send(JSON.stringify(response));
+        } catch (e) {
+          queueMessage(response);
+        }
+      }
+    }
+  };
+}
+
+function scrollToEnd(el) {
+  if (el.scrollTo) {
+    el.scrollTo({
+      top: el.scrollHeight,
+      behavior: "smooth",
+    });
+  } else {
+    el.scrollTop = el.scrollHeight;
   }
 }
 
@@ -172,7 +323,6 @@ function queueMessage(message, push = true) {
     // queue at the start
     $self.messageQueue.unshift(message);
   }
-  
 }
 
 // send messages if chat connected, else
@@ -180,15 +330,63 @@ function queueMessage(message, push = true) {
 function sendOrQueueMessage(peer, message, push = true) {
   const chat_channel = peer.chatChannel;
   // check if peer is connected
-  if (!chat_channel || chat_channel.readyState !== 'open') {
+  if (!chat_channel || chat_channel.readyState !== "open") {
     queueMessage(message, push);
     return;
   }
-  try {
-    chat_channel.send(message);
-  } catch(e) {
-    console.error('Error sending message: ',e);
-    queueMessage(message, push);
+  if (message.file) {
+    sendFile(peer, message);
+  } else {
+    try {
+      chat_channel.send(JSON.stringify(message));
+    } catch (e) {
+      console.error("Error sending message: ", e);
+      queueMessage(message, push);
+    }
+  }
+}
+
+// Handle Media button toggles
+function handleMediaButtons(event) {
+  const target = event.target;
+  if (target.tagName !== "BUTTON") return;
+  switch (target.id) {
+    case "toggle-mic":
+      toggleMic(target);
+      break;
+    case "toggle-cam":
+      toggleCam(target);
+      break;
+  }
+}
+
+function toggleMic(button) {
+  console.log("Toggling Microphone...");
+  const audio = $self.mediaTracks.audio;
+  //console.log(`audio.enabled = ${audio.enabled}`);
+  const enabled_state = (audio.enabled = !audio.enabled);
+  $self.features.audio = enabled_state;
+  button.setAttribute("aria-checked", enabled_state);
+
+  // share features with $peer if connected
+  shareFeatures("audio");
+}
+
+function toggleCam(button) {
+  console.log("Toggling Video...");
+  const video = $self.mediaTracks.video;
+  const enabled_state = (video.enabled = !video.enabled);
+  $self.features.video = enabled_state;
+  button.setAttribute("aria-checked", enabled_state);
+
+  // share features with $peer if connected
+  shareFeatures("video");
+
+  if (enabled_state) {
+    $self.mediaStream.addTrack($self.mediaTracks.video);
+  } else {
+    $self.mediaStream.removeTrack($self.mediaTracks.video);
+    displayStream("#self", $self.mediaStream);
   }
 }
 
@@ -197,9 +395,19 @@ function sendOrQueueMessage(peer, message, push = true) {
  */
 async function requestUserMedia(media_constraints) {
   console.log("Requesting User Media...");
-  $self.mediaStream = new MediaStream();
   $self.media = await navigator.mediaDevices.getUserMedia(media_constraints);
-  $self.mediaStream.addTrack($self.media.getTracks()[0]);
+
+  // Hold onto audio and video track references
+  $self.mediaTracks.audio = $self.media.getAudioTracks()[0];
+  $self.mediaTracks.video = $self.media.getVideoTracks()[0];
+
+  // Mute the audio if `$self.features.audio` evaluates to `false`
+  $self.mediaTracks.audio.enabled = !!$self.features.audio;
+
+  // Add audio and video tracks to mediaStream
+  $self.mediaStream.addTrack($self.mediaTracks.audio);
+  $self.mediaStream.addTrack($self.mediaTracks.video);
+
   displayStream("#self", $self.mediaStream);
 }
 
@@ -207,39 +415,139 @@ function displayStream(selector, stream) {
   document.querySelector(selector).srcObject = stream;
 }
 
-function addStreamingMedia(stream, peer) {
+function addStreamingMedia(peer) {
   console.log("Adding Streaming Media to Peer...");
-  if (stream) {
-    for (let track of stream.getTracks()) {
-      peer.connection.addTrack(track, stream);
-    }
+  const tracks_list = Object.keys($self.mediaTracks);
+  for (let track of tracks_list) {
+    peer.connection.addTrack($self.mediaTracks[track]);
   }
 }
 
 // open symmetric data channel (both users will open
 // as part of joining the call)
 function addChatChannel(peer) {
-  peer.chatChannel = peer.connection.createDataChannel('text chat', {
+  peer.chatChannel = peer.connection.createDataChannel("text chat", {
     negotiated: true,
-    id: 100
+    id: 100,
   });
+
   // receive message
-  peer.chatChannel.onmessage = function(event) {
-    appendMessage('peer', '#chat-log', event.data);
+  peer.chatChannel.onmessage = function (event) {
+    const message = JSON.parse(event.data);
+    if (!message.id) {
+      // Prepare a response and append an incoming message
+      const response = {
+        id: message.timestamp,
+        timestamp: Date.now(),
+      };
+      sendOrQueueMessage(peer, response);
+      appendMessage("peer", "#chat-log", message);
+    } else {
+      // Handle an incoming response
+      handleResponse(message);
+    }
   };
+
   // close channel
-  peer.chatChannel.onclose = function() {
-    console.log('Chat Channel Closed...');
+  peer.chatChannel.onclose = function () {
+    console.log("Chat Channel Closed...");
   };
+
   // open channel
-  peer.chatChannel.onopen = function() {
-    console.log('Chat channel opened...');
-    while ($self.messageQueue.length > 0 && peer.chatChannel.readyState === 'open') {
+  peer.chatChannel.onopen = function () {
+    console.log("Chat channel opened...");
+    while (
+      $self.messageQueue.length > 0 &&
+      peer.chatChannel.readyState === "open"
+    ) {
       // send any queued messages
       let message = $self.messageQueue.shift();
       sendOrQueueMessage(peer, message, false);
     }
   };
+}
+
+// add call features channel
+function addFeaturesChannel(peer) {
+  const featureFunctions = {
+    audio: function () {
+      console.log("Toggling Peer Mute Message...");
+      const status = document.querySelector("#mic-status");
+      // reveal "Remote peer is muted" message if muted (aria-hidden=false)
+      // otherwise hide it (aria-hidden=true)
+      status.setAttribute("aria-hidden", $peer.features.audio);
+    },
+    video: function () {
+      // This is all just to display the poster image
+      // rather than a black frame
+      if (peer.mediaTracks.video) {
+        if (peer.features.video) {
+          peer.mediaStream.addTrack(peer.mediaTracks.video);
+        } else {
+          peer.mediaStream.removeTrack(peer.mediaTracks.video);
+          displayStream("#peer", peer.mediaStream);
+        }
+      }
+    },
+  };
+  console.log("Adding Features Channel...");
+  peer.featuresChannel = peer.connection.createDataChannel("features", {
+    negotiated: true,
+    id: 110,
+  });
+
+  peer.featuresChannel.onopen = function () {
+    console.log("Features Channel Opened...");
+    $self.features.binaryType = peer.featuresChannel.binaryType;
+    // send features information just as soon as the channel opens
+    peer.featuresChannel.send(JSON.stringify($self.features));
+  };
+
+  peer.featuresChannel.onmessage = function (event) {
+    console.log(`Features Channel Message Received: ${event.data}`);
+    const features = JSON.parse(event.data);
+    const features_list = Object.keys(features);
+    for (let f of features_list) {
+      console.log(`Processing Feature ${f}...`);
+      // update the corresponding features field on $peer
+      peer.features[f] = features[f];
+      // if there's a corresponding function, run it
+      if (typeof featureFunctions[f] === "function") {
+        featureFunctions[f]();
+      }
+    }
+  };
+}
+
+function shareFeatures(...features) {
+  const featuresToShare = {};
+
+  // don't try to share features before joining the call or
+  // before features channel is available
+  if (!$peer.featuresChannel) return;
+
+  for (let f of features) {
+    featuresToShare[f] = $self.features[f];
+  }
+
+  try {
+    $peer.featuresChannel.send(JSON.stringify(featuresToShare));
+  } catch (e) {
+    console.error("Error sending features: ", e);
+    // No need to queue. Contents of $self.features will send
+    // as soon as features channel opens
+  }
+}
+
+function handleResponse(response) {
+  const sent_item = document.querySelector(
+    `#chat-log *[data-timestamp="${response.id}"]`
+  );
+  const classes = ["received"];
+  if (response.timestamp - response.id > 1000) {
+    classes.push("delayed");
+  }
+  sent_item.classList.add(...classes);
 }
 
 /**
@@ -248,14 +556,17 @@ function addChatChannel(peer) {
 function establishCallFeatures(peer) {
   console.log("Establishing Call Features...");
   registerRtcCallbacks(peer);
+  addFeaturesChannel(peer);
   addChatChannel(peer);
-  addStreamingMedia($self.mediaStream, peer);
+  addStreamingMedia(peer);
 }
 
 function resetPeer(peer) {
   displayStream("#peer", null);
   peer.connection.close();
   peer.connection = new RTCPeerConnection($self.rtcConfig);
+  peer.mediaStream = new MediaStream();
+  (peer.mediaTracks = {}), (peer.features = {});
 }
 
 /**
@@ -270,10 +581,12 @@ function registerRtcCallbacks(peer) {
   peer.connection.ontrack = handleRtcPeerTrack;
 }
 
-function handleRtcPeerTrack({ track, streams: [stream] }) {
+function handleRtcPeerTrack({ track }) {
   // Handle peer media tracks
-  console.log("Attempt to display media from peer...");
-  displayStream("#peer", stream);
+  console.log(`Handle incoming ${track.kind} track...`);
+  $peer.mediaTracks[track.kind] = track;
+  $peer.mediaStream.addTrack(track);
+  displayStream("#peer", $peer.mediaStream);
 }
 
 function handleRtcConnectionStateChange() {
@@ -291,6 +604,9 @@ function handleRtcDataChannel({ channel }) {
     channel.onopen = function () {
       channel.close();
     };
+  }
+  if (label.startsWith("image-")) {
+    receiveFile(channel);
   }
 }
 
