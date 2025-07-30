@@ -377,7 +377,7 @@ function toggleCam(button) {
     $self.mediaStream.addTrack($self.mediaTracks.video);
   } else {
     $self.mediaStream.removeTrack($self.mediaTracks.video);
-    displayStream("#self", $self.mediaStream);
+    displayStream($self.mediaStream);
   }
 }
 
@@ -399,11 +399,18 @@ async function requestUserMedia(media_constraints) {
   $self.mediaStream.addTrack($self.mediaTracks.audio);
   $self.mediaStream.addTrack($self.mediaTracks.video);
 
-  displayStream("#self", $self.mediaStream);
+  displayStream($self.mediaStream);
 }
 
-function displayStream(selector, stream) {
-  document.querySelector(selector).srcObject = stream;
+function displayStream(stream, id = 'self') {
+  const selector = id === 'self' ? '#self' : `#peer-${id}`;
+  let video_structure = document.querySelector(selector);
+  if (!video_structure) {
+    const videos = document.querySelector('#videos');
+    video_structure = createVideoStructure(id);
+    videos.appendChild(video_structure);
+  }
+  video_structure.querySelector('video').srcObject = stream;
 }
 
 function addStreamingMedia(peer) {
@@ -541,6 +548,30 @@ function handleResponse(response) {
   sent_item.classList.add(...classes);
 }
 
+function createVideoStructure(id) {
+  const figure = document.createElement('figure');
+  const figcaption = document.createElement('figcaption');
+  const video = document.createElement('video');
+  const attributes = {
+    autoplay: '',
+    playsinline: '',
+    poster: 'img/placeholder.png',
+  };
+  const attributes_list = Object.keys(attributes);
+
+  // Set attributes
+  figure.id = `peer-${id}`;
+  figcaption.innerText = id;
+  for (let attr of attributes_list) {
+    video.setAttribute(attr, attributes[attr]);
+  }
+  // Append the video and figcaption elements
+  figure.appendChild(video);
+  figure.appendChild(figcaption);
+  // Return the complete figure
+  return figure;
+}
+
 /**
  *  Call Features & Reset Functions
  */
@@ -633,24 +664,27 @@ function registerScCallbacks() {
   console.log("Registering Sc callbacks...");
   sc.on("connect", handleScConnect);
   sc.on("connected peer", handleScConnectedPeer);
+  sc.on('connected peers', handleScConnectedPeers);
   sc.on("disconnected peer", handleScDisconnectedPeer);
   sc.on("signal", handleScSignal);
 }
 
 function handleScConnect() {
   console.log("Successfully connected to the signaling server...");
-  establishCallFeatures($peer);
+  $self.id = sc.id;
+  console.log(`Self ID: ${$self.id}`);
 }
 
-function handleScConnectedPeer() {
-  console.log("Successfully Connected Peer...");
-  // only initially connected party will receive this event
-  $self.isPolite = true;
+function handleScConnectedPeers(ids) {
+  console.log(`Connected Peer IDs: ${ids.join(', ')}`);
+}
+
+function handleScConnectedPeer(id) {
+  console.log(`Newly connected peer id: ${id}`);
 }
 
 function handleScDisconnectedPeer() {
-  resetPeer($peer);
-  establishCallFeatures($peer);
+  console.log(`Disconnected peer ID: ${id}`);
 }
 
 async function handleScSignal({ description, candidate }) {
@@ -691,13 +725,26 @@ async function handleScSignal({ description, candidate }) {
  *  Utility Functions
  */
 function prepareNamespace(hash, set_location) {
-  let ns = hash.replace(/^#/, ""); // remove # from the hash
-  if (/^[0-9]{7}$/.test(ns)) {
-    console.log("Checked existing namespace", ns);
+  let ns = hash.replace(/^#/, ''); // remove # from the hash
+  if (/^[a-z]{4}-[a-z]{4}-[a-z]{4}$/.test(ns)) {
+    console.log(`Checked existing namespace '${ns}'`);
     return ns;
   }
-  ns = Math.random().toString().substring(2, 9);
-  console.log("Created new namespace", ns);
+  ns = generateRandomAlphaString('-', 4, 4, 4);
+  console.log(`Created new namespace '${ns}'`);
   if (set_location) window.location.hash = ns;
   return ns;
+}
+
+function generateRandomAlphaString(separator, ...groups) {
+  const alphabet = 'abcdefghijklmnopqrstuvwxyz';
+  let ns = [];
+  for (let group of groups) {
+    let str = '';
+    for (let i = 0; i < group; i++) {
+      str += alphabet[Math.floor(Math.random() * alphabet.length)];
+    }
+    ns.push(str);
+  }
+  return ns.join(separator);
 }

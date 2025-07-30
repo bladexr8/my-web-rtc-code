@@ -3,134 +3,7 @@
    License: none (public domain)
 */
 /* stylelint-disable */
-a,
-abbr,
-acronym,
-address,
-applet,
-article,
-aside,
-audio,
-b,
-big,
-blockquote,
-body,
-canvas,
-caption,
-center,
-cite,
-code,
-dd,
-del,
-details,
-dfn,
-div,
-dl,
-dt,
-em,
-embed,
-fieldset,
-figcaption,
-figure,
-footer,
-form,
-h1,
-h2,
-h3,
-h4,
-h5,
-h6,
-header,
-hgroup,
-html,
-i,
-iframe,
-img,
-ins,
-kbd,
-label,
-legend,
-li,
-mark,
-menu,
-nav,
-object,
-ol,
-output,
-p,
-pre,
-q,
-ruby,
-s,
-samp,
-section,
-small,
-span,
-strike,
-strong,
-sub,
-summary,
-sup,
-table,
-tbody,
-td,
-tfoot,
-th,
-thead,
-time,
-tr,
-tt,
-u,
-ul,
-var,
-video {
-  margin: 0;
-  padding: 0;
-  border: 0;
-  font: inherit;
-  vertical-align: baseline;
-}
-article,
-aside,
-details,
-figcaption,
-figure,
-footer,
-header,
-hgroup,
-main,
-menu,
-nav,
-section {
-  display: block;
-}
-.lint,
-html {
-  line-height: 1;
-}
-.lint,
-body {
-  line-height: inherit;
-}
-ol,
-ul {
-  list-style: none;
-}
-blockquote,
-q {
-  quotes: none;
-}
-blockquote:after,
-blockquote:before,
-q:after,
-q:before {
-  content: "";
-  content: none;
-}
-table {
-  border-collapse: collapse;
-  border-spacing: 0;
-}
+a,abbr,acronym,address,applet,article,aside,audio,b,big,blockquote,body,canvas,caption,center,cite,code,dd,del,details,dfn,div,dl,dt,em,embed,fieldset,figcaption,figure,footer,form,h1,h2,h3,h4,h5,h6,header,hgroup,html,i,iframe,img,ins,kbd,label,legend,li,mark,menu,nav,object,ol,output,p,pre,q,ruby,s,samp,section,small,span,strike,strong,sub,summary,sup,table,tbody,td,tfoot,th,thead,time,tr,tt,u,ul,var,video{margin:0;padding:0;border:0;font:inherit;vertical-align:baseline}article,aside,details,figcaption,figure,footer,header,hgroup,main,menu,nav,section{display:block}.lint,html{line-height:1}.lint,body{line-height:inherit}ol,ul{list-style:none}blockquote,q{quotes:none}blockquote:after,blockquote:before,q:after,q:before{content:'';content:none}table{border-collapse:collapse;border-spacing:0}
 /* stylelint-enable */
 
 /* Begin site styles below */
@@ -143,17 +16,15 @@ html {
 }
 
 /* Layout */
-
 * {
   box-sizing: border-box;
 }
-
 #interface {
   height: 100vh;
   padding: 22px;
   display: grid;
   grid-gap: 11px;
-  grid-template-rows: auto auto 1fr auto;
+  grid-template-rows: auto 1fr auto;
 }
 
 #header > h1 {
@@ -172,9 +43,6 @@ html {
 
 *[aria-hidden="true"] {
   visibility: hidden;
-}
-input[type="file"][aria-hidden="true"] {
-  display: none;
 }
 
 /* Forms and Controls */
@@ -206,90 +74,19 @@ button[aria-checked="false"] {
   color: white;
 }
 .leave {
-  background-color: #ca0;
+  background-color: #CA0;
   color: black;
 }
 
-/* Chat Elements */
-img {
-  display: block;
-  max-width: 100%;
-}
-#chat {
-  height: 100%;
-  min-height: 220px; /* Accommodate small, squarish screens */
-  border: 1px solid #999;
-  padding: 5.5px;
-
-  display: flex; /* Use columnar flexbox to constrain log */
-  flex-direction: column;
-
-  font-weight: normal;
-}
-#chat-log {
-  flex-grow: 1;
-  overflow: auto;
-  padding-bottom: 11px;
-  margin-bottom: 5.5px;
-  min-height: 0; /* Firefox fix */
-}
-#chat-log li {
-  border-radius: 5.5px;
-  padding: 5.5px;
-  margin-bottom: 5.5px;
-  max-width: 60%;
-  clear: both;
-  overflow: hidden;
-}
-#chat-log .img {
-  padding: 0;
-}
-#chat-log .peer {
-  background: #eee;
-  float: left;
-}
-#chat-log .self {
-  background: #009;
-  color: #eee;
-  opacity: 0.3;
-  float: right;
-}
-#chat-log .self.received {
-  opacity: 1;
-}
-#chat-log .self.received.delayed {
-  transition: opacity 0.4s;
-}
-#chat-form {
-  flex-grow: 0;
-  display: flex;
-}
-#chat-form button {
-  cursor: pointer;
-  flex: 0 0 auto;
-  background: #009;
-  color: #eee;
-}
-#chat-img-btn {
-  background: #eee;
-  color: #000;
-  margin-right: 5.5px;
-}
-#chat-form input {
-  flex: 1 1 100%;
-  padding: 9px;
-  margin-right: 5.5px;
-  border: 2px solid #999;
-  outline: 0;
-}
-
 /* Video Elements */
-
 #videos {
-  position: relative;
+  align-self: start;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 11px;
 }
 video {
-  background-color: #ddd;
+  background-color: #DDD;
   display: block;
   width: 100%;
   aspect-ratio: 4 / 3;
@@ -299,33 +96,44 @@ video {
 #mic-status {
   padding: 11px;
 }
-#self {
-  width: 30%;
+figure {
+  position: relative;
+}
+figcaption {
+  color: #EEE;
+  background: rgba(16,16,16,0.6);
+  font-weight: normal;
+  font-size: 14px;
   position: absolute;
-  top: 11px;
-  left: 11px;
-  z-index: 1000; /* Prevent remote filters from hiding #self */
-  border: 1px solid #ccc;
+  bottom: 0;
+  left: 0;
+  width: 100%;
+  padding: 5.5px;
 }
-.connected #self {
-  cursor: pointer;
+figcaption form {
+  display: flex;
+  flex-flow: row wrap;
+  gap: 5.5px;
 }
-
-/*  Video Effects */
-
-.filter-grayscale {
-  filter: grayscale(100%);
+figcaption form > * {
+  font-family: inherit;
+  font-size: inherit;
+  font-weight: inherit;
+  flex: 1 0 auto;
 }
-.filter-sepia {
-  filter: sepia(100%);
+#username-input {
+  background-color: inherit;
+  border: 1px solid #CCC;
+  color: #EEE;
+  display: block;
+  padding: 5.5px;
+  max-width: 100%;
 }
-.filter-noir {
-  filter: grayscale(100%) contrast(300%) brightness(60%);
+#username-set-btn {
+  background: rgba(64,64,64,0.8);
+  color: #EEE;
+  padding: 5.5px;
 }
-.filter-psychedelic {
-  filter: hue-rotate(180deg) saturate(400%) contrast(200%);
-}
-
 /* Media Queries */
 
 @media screen and (min-width: 500px) {
@@ -342,18 +150,12 @@ video {
     margin-bottom: 0;
   }
 }
-
 @media screen and (min-width: 680px) {
   #interface {
-    grid-template-columns: 1fr 1fr;
     grid-template-rows: auto 1fr auto;
   }
   #header {
-    grid-column: 1 / 3;
-  }
-  #chat {
-    grid-column: 2 / 3;
-    grid-row: 2 / 4;
+    grid-column: 1 / 2;
   }
   #footer {
     grid-column: 1 / 2;
