@@ -59,7 +59,7 @@ namespaces.on('connect', function(socket) {
 
 });
 
-const mp_namespaces = io.of(/^\/[a-z]{4}\-[a-z]{4}\-[a-z]{4}$/);
+const mp_namespaces = io.of(/^\/[a-z]{4}-[a-z]{4}-[a-z]{4}$/);
 
 mp_namespaces.on('connect', function(socket) {
 
@@ -78,8 +78,8 @@ mp_namespaces.on('connect', function(socket) {
   // Send the connecting peer ID to all connected peers
   socket.broadcast.emit('connected peer', socket.id);
 
-  socket.on('signal', function({ to, from, signal }) {
-    socket.to(to).emit('signal', { to, from, signal });
+  socket.on('signal', function({ recipient, sender, signal }) {
+    socket.to(recipient).emit('signal', { recipient, sender, signal });
   });
 
   socket.on('disconnect', function() {
@@ -92,6 +92,8 @@ mp_namespaces.on('connect', function(socket) {
  *  End of the main monkey business.
  */
 
-// Export the Express app and Socket.io instances for use in
-// /scripts/start-server:
+/**
+ *  Export the Express app and Socket.io instances for use in
+ *  /scripts/start-server:
+ */
 module.exports = {app, io, public_dir};
