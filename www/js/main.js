@@ -9,14 +9,10 @@
 "use strict";
 
 /**
- *  Global Variables: $self and $peer
+ *  Global Variables: $self and $peers
  */
 const $self = {
   rtcConfig: null,
-  isPolite: false,
-  isMakingOffer: false,
-  isIgnoringOffer: false,
-  isSettingRemoteAnswerPending: false,
   mediaConstraints: { audio: true, video: true },
   mediaStream: new MediaStream(),
   mediaTracks: {},
@@ -25,12 +21,7 @@ const $self = {
   },
 };
 
-const $peer = {
-  connection: new RTCPeerConnection($self.rtcConfig),
-  mediaStream: new MediaStream(),
-  mediaTracks: {},
-  features: {},
-};
+const $peers = new Map();
 
 /**
  *  Signaling-Channel Setup
