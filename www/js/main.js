@@ -127,7 +127,9 @@ function joinCall() {
 function leaveCall() {
   console.log("Closing Socket...");
   sc.close();
-  resetPeer($peer);
+  for (let id of $peers.keys()) {
+    resetPeer(id);
+  }
 }
 
 function handleSelfVideo(event) {
@@ -414,7 +416,8 @@ function displayStream(stream, id = 'self') {
 }
 
 function addStreamingMedia(peer) {
-  console.log("Adding Streaming Media to Peer...");
+  console.log(`Adding Streaming Media to Peer ${id}`);
+  const peer = $peers.get(id);
   const tracks_list = Object.keys($self.mediaTracks);
   for (let track of tracks_list) {
     peer.connection.addTrack($self.mediaTracks[track]);
@@ -466,7 +469,8 @@ function addChatChannel(peer) {
 }
 
 // add call features channel
-function addFeaturesChannel(peer) {
+function addFeaturesChannel(id) {
+  const peer = $peers.get(id);
   const featureFunctions = {
     audio: function () {
       console.log("Toggling Peer Mute Message...");
@@ -483,7 +487,7 @@ function addFeaturesChannel(peer) {
           peer.mediaStream.addTrack(peer.mediaTracks.video);
         } else {
           peer.mediaStream.removeTrack(peer.mediaTracks.video);
-          displayStream("#peer", peer.mediaStream);
+          displayStream(id, peer.mediaStream);
         }
       }
     },
@@ -575,20 +579,35 @@ function createVideoStructure(id) {
 /**
  *  Call Features & Reset Functions
  */
-function establishCallFeatures(peer) {
+function initializePeer(id, polite) {
+  $peers.set(id, {
+    connection: new RTCPeerConnection($self.rtcConfig),
+    mediaStream: new MediaStream(),
+    mediaTracks: {},
+    features: {},
+    selfStates: {
+      isPolite: polite,
+      isMakingOffer: false,
+      isIgnoringOffer: false,
+      isSettingRemoteAnswerPending: false,
+    }
+  });
+}
+
+function establishCallFeatures(id) {
   console.log("Establishing Call Features...");
-  registerRtcCallbacks(peer);
-  addFeaturesChannel(peer);
+  registerRtcCallbacks(id);
+  addFeaturesChannel(id);
   addChatChannel(peer);
   addStreamingMedia(peer);
 }
 
-function resetPeer(peer) {
-  displayStream("#peer", null);
+function resetPeer(id) {
+  const peer = $peers.get(id);
+  displayStream(id, null);
+  document.querySelector(`#peer-${id}`).remove();
   peer.connection.close();
-  peer.connection = new RTCPeerConnection($self.rtcConfig);
-  peer.mediaStream = new MediaStream();
-  (peer.mediaTracks = {}), (peer.features = {});
+  $peers.delete(id);
 }
 
 /**
@@ -677,14 +696,24 @@ function handleScConnect() {
 
 function handleScConnectedPeers(ids) {
   console.log(`Connected Peer IDs: ${ids.join(', ')}`);
+  for (let id of ids) {
+    if (id === $self.id) continue;
+    // be polite with already connected peers
+    initializePeer(id, true);
+    establishCallFeatures(id);
+  }
 }
 
 function handleScConnectedPeer(id) {
   console.log(`Newly connected peer id: ${id}`);
+  // be impolite with each newly connecting peer
+  initializePeer(id, false);
+  establishCallFeatures(id);
 }
 
 function handleScDisconnectedPeer() {
   console.log(`Disconnected peer ID: ${id}`);
+  resetPeer(id);
 }
 
 async function handleScSignal({ description, candidate }) {
