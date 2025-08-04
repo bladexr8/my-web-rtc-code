@@ -613,27 +613,40 @@ function resetPeer(id) {
 /**
  *  WebRTC Functions and Callbacks
  */
-function registerRtcCallbacks(peer) {
+function registerRtcCallbacks(id) {
   console.log("Registering RTC Callbacks...");
-  peer.connection.onconnectionstatechange = handleRtcConnectionStateChange;
+  const peer = $peers.get(id);
+  peer.connection.onconnectionstatechange = handleRtcConnectionStateChange(id);
   peer.connection.ondatachannel = handleRtcDataChannel;
-  peer.connection.onnegotiationneeded = handleRtcConnectionNegotiation;
-  peer.connection.onicecandidate = handleRtcIceCandidate;
-  peer.connection.ontrack = handleRtcPeerTrack;
+  peer.connection.onnegotiationneeded = handleRtcConnectionNegotiation(id);
+  peer.connection.onicecandidate = handleRtcIceCandidate(id);
+  peer.connection.ontrack = handleRtcPeerTrack(id);
 }
 
-function handleRtcPeerTrack({ track }) {
-  // Handle peer media tracks
-  console.log(`Handle incoming ${track.kind} track...`);
-  $peer.mediaTracks[track.kind] = track;
-  $peer.mediaStream.addTrack(track);
-  displayStream("#peer", $peer.mediaStream);
+function handleRtcPeerTrack(id) {
+  return function({ track }) {
+    const peer = $peers.get(id);
+    // Handle peer media tracks
+    console.log(`Handle incoming ${track.kind} track...`);
+    $peer.mediaTracks[track.kind] = track;
+    $peer.mediaStream.addTrack(track);
+    displayStream("#peer", $peer.mediaStream);
+  }
+  
 }
 
-function handleRtcConnectionStateChange() {
-  const connection_state = $peer.connection.connectionState;
-  console.log(`The connection state is now ${connection_state}`);
-  document.querySelector("body").className = connection_state;
+function handleRtcConnectionStateChange(id) {
+  return function() {
+    const peer = $peers.get(id);
+    const connection_state = peer.connection.connectionState;
+    console.log(`The connection state is now ${connection_state}`);
+    const peer_element = document.querySelector(`#peer-${id}`);
+    if (peer_element) {
+      peer_element.dataset.connectionState = connection_state;
+    }
+    console.log(`Connection State '${connection_state}' for Peer ID: ${id}`);
+  };
+  
 }
 
 function handleRtcDataChannel({ channel }) {
@@ -660,20 +673,35 @@ function handleRtcDataChannel({ channel }) {
 /**
  *  Reusable WebRTC Functions and Callbacks
  */
-async function handleRtcConnectionNegotiation() {
-  // Handle connection negotiation
-  console.log("Handling RTC Connection Negotiation...");
-  $self.isMakingOffer = true;
-  console.log("Attempting to make an offer...");
-  await $peer.connection.setLocalDescription();
-  sc.emit("signal", { description: $peer.connection.localDescription });
-  $self.isMakingOffer = false;
+async function handleRtcConnectionNegotiation(id) {
+  return async function() {
+    const peer = $peers.get(id);
+    const self_state = peer.selfStates;
+    // Handle connection negotiation
+    console.log("Handling RTC Connection Negotiation...");
+    self_state.isMakingOffer = true;
+    console.log("Attempting to make an offer...");
+    await peer.connection.setLocalDescription();
+    sc.emit("signal", {
+      recipient: id,
+      sender: $self.id, 
+      signal: {description: $peer.connection.localDescription} 
+    });
+    self_state.isMakingOffer = false;
+  }
 }
 
-function handleRtcIceCandidate({ candidate }) {
-  // Handle ICE candidates
-  console.log("Attempting to handle an ICE candidate...");
-  sc.emit("signal", { candidate: candidate });
+function handleRtcIceCandidate(id) {
+  return function({ candidate }) {
+    // Handle ICE candidates
+    console.log("Attempting to handle an ICE candidate...");
+    sc.emit("signal", { 
+      recipient: id,
+      sender: $self.id,
+      signal: {candidate} 
+    });
+  }
+  
 }
 
 /**
@@ -716,35 +744,42 @@ function handleScDisconnectedPeer() {
   resetPeer(id);
 }
 
-async function handleScSignal({ description, candidate }) {
+async function handleScSignal({ sender, signal: {candidate, description} }) {
   console.log("Handling Sc Signal...");
+  const id = sender;
+  const peer = $peers.get(id);
+  const self_state = peer.selfStates;
   if (description) {
     console.log("Handling Local Description...");
     const ready_for_offer =
       !self.isMakingOffer &&
-      ($peer.connection.signalingState == "stable" ||
-        $self.isSettingRemoteAnswerPending);
+      (peer.connection.signalingState == "stable" ||
+        self_state.isSettingRemoteAnswerPending);
     const offer_collision = description.type === "offer" && !ready_for_offer;
-    $self.isIgnoringOffer = !$self.isPolite && offer_collision;
-    if ($self.isIgnoringOffer) {
+    self_state.isIgnoringOffer = !self_state.isPolite && offer_collision;
+    if (self_state.isIgnoringOffer) {
       return;
     }
-    $self.isSettingRemoteAnswerPending = description.type == "answer";
-    await $peer.connection.setRemoteDescription(description);
-    $self.isSettingRemoteAnswerPending = false;
+    self_state.isSettingRemoteAnswerPending = description.type == "answer";
+    await peer.connection.setRemoteDescription(description);
+    self_state.isSettingRemoteAnswerPending = false;
     if (description.type === "offer") {
-      await $peer.connection.setLocalDescription();
-      sc.emit("signal", { description: $peer.connection.localDescription });
+      await peer.connection.setLocalDescription();
+      sc.emit("signal", { 
+        recipient: id,
+        sender: $self.id,
+        signal: { description: peer.connection.localDescription }
+      });
     }
   } else if (candidate) {
     console.log("Handling Candidate...");
     try {
-      await $peer.connection.addIceCandidate(candidate);
+      await peer.connection.addIceCandidate(candidate);
     } catch (e) {
       // Log error unless $self is ignoring offers
       // and candidate is not an empty string
-      if ($self.isIgnoringOffer && candidate.candidate.length > 1) {
-        console.error("Unable to add ICE candidate for peer: ", e);
+      if (self_state.isIgnoringOffer && candidate.candidate.length > 1) {
+        console.error(`Unable to add ICE candidate for peer ID: ${id}`, e);
       }
     }
   }
