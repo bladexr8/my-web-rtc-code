@@ -71,9 +71,9 @@ document
 document.querySelector("#self").addEventListener("click", handleSelfVideo);
 
 // handle submit button for chat
-document
-  .querySelector("#chat-form")
-  .addEventListener("submit", handleMessageForm);
+//document
+//  .querySelector("#chat-form")
+//  .addEventListener("submit", handleMessageForm);
 
 // set mic toggle state
 document
@@ -84,9 +84,14 @@ document
 document.querySelector("#footer").addEventListener("click", handleMediaButtons);
 
 // handler for image file upload
+//document
+//  .querySelector("#chat-img-btn")
+//  .addEventListener("click", handleImageButton);
+
+// handler for username entry
 document
-  .querySelector("#chat-img-btn")
-  .addEventListener("click", handleImageButton);
+  .querySelector("#username-form")
+  .addEventListener("submit", handleUsernameForm);
 
 /**
  *  User-Media Setup
@@ -362,7 +367,9 @@ function toggleMic(button) {
   button.setAttribute("aria-checked", enabled_state);
 
   // share features with $peer if connected
-  shareFeatures("audio");
+  for (let id of $peers.keys()) {
+    shareFeatures(id, "audio");
+  }
 }
 
 function toggleCam(button) {
@@ -373,13 +380,30 @@ function toggleCam(button) {
   button.setAttribute("aria-checked", enabled_state);
 
   // share features with $peer if connected
-  shareFeatures("video");
+  for (let id of $peer.keys()) {
+    shareFeatures(id, "video");
+  }
 
   if (enabled_state) {
     $self.mediaStream.addTrack($self.mediaTracks.video);
   } else {
     $self.mediaStream.removeTrack($self.mediaTracks.video);
     displayStream($self.mediaStream);
+  }
+}
+
+// handle username entry
+function handleUsernameForm(e) {
+  e.preventDefault();
+  const form = e.target;
+  const username = form.querySelector("#username-input").value;
+  const figcaption = document.querySelector("#self figcaption");
+  figcaption.innerText = username;
+
+  $self.features.username = username;
+
+  for (let id of $peers.keys()) {
+    shareFeatures(id, "username");
   }
 }
 
@@ -404,18 +428,18 @@ async function requestUserMedia(media_constraints) {
   displayStream($self.mediaStream);
 }
 
-function displayStream(stream, id = 'self') {
-  const selector = id === 'self' ? '#self' : `#peer-${id}`;
+function displayStream(stream, id = "self") {
+  const selector = id === "self" ? "#self" : `#peer-${id}`;
   let video_structure = document.querySelector(selector);
   if (!video_structure) {
-    const videos = document.querySelector('#videos');
+    const videos = document.querySelector("#videos");
     video_structure = createVideoStructure(id);
     videos.appendChild(video_structure);
   }
-  video_structure.querySelector('video').srcObject = stream;
+  video_structure.querySelector("video").srcObject = stream;
 }
 
-function addStreamingMedia(peer) {
+function addStreamingMedia(id) {
   console.log(`Adding Streaming Media to Peer ${id}`);
   const peer = $peers.get(id);
   const tracks_list = Object.keys($self.mediaTracks);
@@ -474,10 +498,16 @@ function addFeaturesChannel(id) {
   const featureFunctions = {
     audio: function () {
       console.log("Toggling Peer Mute Message...");
-      const status = document.querySelector("#mic-status");
+      //const status = document.querySelector("#mic-status");
       // reveal "Remote peer is muted" message if muted (aria-hidden=false)
       // otherwise hide it (aria-hidden=true)
-      status.setAttribute("aria-hidden", $peer.features.audio);
+      //status.setAttribute("aria-hidden", $peer.features.audio);
+      const username = peer.features.username ? peer.features.username : id;
+      showUsernameAndMuteStatus(username);
+    },
+    username: function () {
+      // Update the username
+      showUsernameAndMuteStatus(peer.features.username);
     },
     video: function () {
       // This is all just to display the poster image
@@ -487,7 +517,7 @@ function addFeaturesChannel(id) {
           peer.mediaStream.addTrack(peer.mediaTracks.video);
         } else {
           peer.mediaStream.removeTrack(peer.mediaTracks.video);
-          displayStream(id, peer.mediaStream);
+          displayStream(peer.mediaStream, id);
         }
       }
     },
@@ -519,9 +549,18 @@ function addFeaturesChannel(id) {
       }
     }
   };
+  function showUsernameAndMuteStatus(username) {
+    const fc = document.querySelector(`#peer-${id} figcaption`);
+    if (peer.features.audio) {
+      fc.innerText = username;
+    } else {
+      fc.innerText = `${username} (Muted)`;
+    }
+  }
 }
 
-function shareFeatures(...features) {
+function shareFeatures(id, ...features) {
+  const peer = $peers.get(id);
   const featuresToShare = {};
 
   // don't try to share features before joining the call or
@@ -553,13 +592,13 @@ function handleResponse(response) {
 }
 
 function createVideoStructure(id) {
-  const figure = document.createElement('figure');
-  const figcaption = document.createElement('figcaption');
-  const video = document.createElement('video');
+  const figure = document.createElement("figure");
+  const figcaption = document.createElement("figcaption");
+  const video = document.createElement("video");
   const attributes = {
-    autoplay: '',
-    playsinline: '',
-    poster: 'img/placeholder.png',
+    autoplay: "",
+    playsinline: "",
+    poster: "img/placeholder.png",
   };
   const attributes_list = Object.keys(attributes);
 
@@ -590,7 +629,7 @@ function initializePeer(id, polite) {
       isMakingOffer: false,
       isIgnoringOffer: false,
       isSettingRemoteAnswerPending: false,
-    }
+    },
   });
 }
 
@@ -598,13 +637,13 @@ function establishCallFeatures(id) {
   console.log("Establishing Call Features...");
   registerRtcCallbacks(id);
   addFeaturesChannel(id);
-  addChatChannel(peer);
-  addStreamingMedia(peer);
+  //addChatChannel(peer);
+  addStreamingMedia(id);
 }
 
 function resetPeer(id) {
   const peer = $peers.get(id);
-  displayStream(id, null);
+  displayStream(null, id);
   document.querySelector(`#peer-${id}`).remove();
   peer.connection.close();
   $peers.delete(id);
@@ -624,19 +663,18 @@ function registerRtcCallbacks(id) {
 }
 
 function handleRtcPeerTrack(id) {
-  return function({ track }) {
+  return function ({ track }) {
     const peer = $peers.get(id);
     // Handle peer media tracks
-    console.log(`Handle incoming ${track.kind} track...`);
+    console.log(`Handle incoming ${track.kind} track from peer ID: ${id}...`);
     $peer.mediaTracks[track.kind] = track;
     $peer.mediaStream.addTrack(track);
-    displayStream("#peer", $peer.mediaStream);
-  }
-  
+    displayStream($peer.mediaStream, "#peer");
+  };
 }
 
 function handleRtcConnectionStateChange(id) {
-  return function() {
+  return function () {
     const peer = $peers.get(id);
     const connection_state = peer.connection.connectionState;
     console.log(`The connection state is now ${connection_state}`);
@@ -646,7 +684,6 @@ function handleRtcConnectionStateChange(id) {
     }
     console.log(`Connection State '${connection_state}' for Peer ID: ${id}`);
   };
-  
 }
 
 function handleRtcDataChannel({ channel }) {
@@ -674,7 +711,7 @@ function handleRtcDataChannel({ channel }) {
  *  Reusable WebRTC Functions and Callbacks
  */
 async function handleRtcConnectionNegotiation(id) {
-  return async function() {
+  return async function () {
     const peer = $peers.get(id);
     const self_state = peer.selfStates;
     // Handle connection negotiation
@@ -684,24 +721,23 @@ async function handleRtcConnectionNegotiation(id) {
     await peer.connection.setLocalDescription();
     sc.emit("signal", {
       recipient: id,
-      sender: $self.id, 
-      signal: {description: $peer.connection.localDescription} 
+      sender: $self.id,
+      signal: { description: $peer.connection.localDescription },
     });
     self_state.isMakingOffer = false;
-  }
+  };
 }
 
 function handleRtcIceCandidate(id) {
-  return function({ candidate }) {
+  return function ({ candidate }) {
     // Handle ICE candidates
     console.log("Attempting to handle an ICE candidate...");
-    sc.emit("signal", { 
+    sc.emit("signal", {
       recipient: id,
       sender: $self.id,
-      signal: {candidate} 
+      signal: { candidate },
     });
-  }
-  
+  };
 }
 
 /**
@@ -711,7 +747,7 @@ function registerScCallbacks() {
   console.log("Registering Sc callbacks...");
   sc.on("connect", handleScConnect);
   sc.on("connected peer", handleScConnectedPeer);
-  sc.on('connected peers', handleScConnectedPeers);
+  sc.on("connected peers", handleScConnectedPeers);
   sc.on("disconnected peer", handleScDisconnectedPeer);
   sc.on("signal", handleScSignal);
 }
@@ -723,7 +759,7 @@ function handleScConnect() {
 }
 
 function handleScConnectedPeers(ids) {
-  console.log(`Connected Peer IDs: ${ids.join(', ')}`);
+  console.log(`Connected Peer IDs: ${ids.join(", ")}`);
   for (let id of ids) {
     if (id === $self.id) continue;
     // be polite with already connected peers
@@ -739,12 +775,12 @@ function handleScConnectedPeer(id) {
   establishCallFeatures(id);
 }
 
-function handleScDisconnectedPeer() {
+function handleScDisconnectedPeer(id) {
   console.log(`Disconnected peer ID: ${id}`);
   resetPeer(id);
 }
 
-async function handleScSignal({ sender, signal: {candidate, description} }) {
+async function handleScSignal({ sender, signal: { candidate, description } }) {
   console.log("Handling Sc Signal...");
   const id = sender;
   const peer = $peers.get(id);
@@ -765,10 +801,10 @@ async function handleScSignal({ sender, signal: {candidate, description} }) {
     self_state.isSettingRemoteAnswerPending = false;
     if (description.type === "offer") {
       await peer.connection.setLocalDescription();
-      sc.emit("signal", { 
+      sc.emit("signal", {
         recipient: id,
         sender: $self.id,
-        signal: { description: peer.connection.localDescription }
+        signal: { description: peer.connection.localDescription },
       });
     }
   } else if (candidate) {
@@ -789,22 +825,22 @@ async function handleScSignal({ sender, signal: {candidate, description} }) {
  *  Utility Functions
  */
 function prepareNamespace(hash, set_location) {
-  let ns = hash.replace(/^#/, ''); // remove # from the hash
+  let ns = hash.replace(/^#/, ""); // remove # from the hash
   if (/^[a-z]{4}-[a-z]{4}-[a-z]{4}$/.test(ns)) {
     console.log(`Checked existing namespace '${ns}'`);
     return ns;
   }
-  ns = generateRandomAlphaString('-', 4, 4, 4);
+  ns = generateRandomAlphaString("-", 4, 4, 4);
   console.log(`Created new namespace '${ns}'`);
   if (set_location) window.location.hash = ns;
   return ns;
 }
 
 function generateRandomAlphaString(separator, ...groups) {
-  const alphabet = 'abcdefghijklmnopqrstuvwxyz';
+  const alphabet = "abcdefghijklmnopqrstuvwxyz";
   let ns = [];
   for (let group of groups) {
-    let str = '';
+    let str = "";
     for (let i = 0; i < group; i++) {
       str += alphabet[Math.floor(Math.random() * alphabet.length)];
     }
